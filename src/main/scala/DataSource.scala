@@ -41,22 +41,22 @@ class DataSource(val dsp: DataSourceParams)
       (entityId, user)
     }.cache()
 
-    // create a RDD of (entityID, Item)
+    // create a RDD of (entityID, Article)
     val articleRDD: RDD[(String, Article)] = PEventStore.aggregateProperties(
       appName = dsp.appName,
       entityType = "article"
     )(sc).map { case (entityId, properties) =>
-      val item = try {
-        // Assume categories is optional property of item.
+      val article = try {
+        // Assume categories is optional property of article.
         Article(categories = properties.getOpt[List[String]]("categories"))
       } catch {
         case e: Exception => {
           logger.error(s"Failed to get properties ${properties} of" +
-            s" item ${entityId}. Exception: ${e}.")
+            s" article ${entityId}. Exception: ${e}.")
           throw e
         }
       }
-      (entityId, item)
+      (entityId, article)
     }.cache()
 
     val eventsRDD: RDD[Event] = PEventStore.find(
@@ -64,7 +64,7 @@ class DataSource(val dsp: DataSourceParams)
       entityType = Some("user"),
       eventNames = Some(List("view", "like", "share", "rate")),
       // targetEntityType is optional field of an event.
-      targetEntityType = Some(Some("item")))(sc)
+      targetEntityType = Some(Some("article")))(sc)
       .cache()
 
     val viewEventsRDD: RDD[ViewEvent] = eventsRDD
