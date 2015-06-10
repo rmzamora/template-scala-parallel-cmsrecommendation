@@ -48,7 +48,7 @@ class DataSource(val dsp: DataSourceParams)
     )(sc).map { case (entityId, properties) =>
       val item = try {
         // Assume categories is optional property of item.
-        Item(categories = properties.getOpt[List[String]]("categories"))
+        Article(categories = properties.getOpt[List[String]]("categories"))
       } catch {
         case e: Exception => {
           logger.error(s"Failed to get properties ${properties} of" +
@@ -73,7 +73,7 @@ class DataSource(val dsp: DataSourceParams)
         try {
           ViewEvent(
             user = event.entityId,
-            item = event.targetEntityId.get,
+            article = event.targetEntityId.get,
             t = event.eventTime.getMillis
           )
         } catch {
@@ -90,7 +90,7 @@ class DataSource(val dsp: DataSourceParams)
         try {
           LikeEvent(
             user = event.entityId,
-            item = event.targetEntityId.get,
+            article = event.targetEntityId.get,
             t = event.eventTime.getMillis
           )
         } catch {
@@ -107,7 +107,7 @@ class DataSource(val dsp: DataSourceParams)
       try {
         ShareEvent(
           user = event.entityId,
-          item = event.targetEntityId.get,
+          article = event.targetEntityId.get,
           t = event.eventTime.getMillis
         )
       } catch {
@@ -124,7 +124,7 @@ class DataSource(val dsp: DataSourceParams)
       try {
         RateEvent(
           user = event.entityId,
-          item = event.targetEntityId.get,
+          article = event.targetEntityId.get,
           t = event.eventTime.getMillis
         )
       } catch {
