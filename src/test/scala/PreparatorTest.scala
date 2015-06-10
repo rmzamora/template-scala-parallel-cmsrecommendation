@@ -13,8 +13,8 @@ class PreparatorTest
   )
 
   val articles = Map(
-    "i0" -> Article(categories = Some(List("c0", "c1"))),
-    "i1" -> Article(categories = None)
+    "i0" -> Article(categories = Some(List("c0", "c1")), tags = None),
+    "i1" -> Article(categories = None, Some(List("t0", "t1")))
   )
 
   val view = Seq(
