@@ -282,7 +282,7 @@ class CMSAlgorithm(val ap: CMSAlgorithmParams)
     val articleScores = topScores.map { case (i, s) =>
       new ArticleScore(
         // convert item int index back to string ID
-        article = model.articleStringIntMap(i),
+        article = model.articleIntStringMap(i),
         score = s
       )
     }
