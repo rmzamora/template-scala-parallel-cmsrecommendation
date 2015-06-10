@@ -29,9 +29,9 @@ class CMSAlgorithmTest
   val users = Map("u0" -> User(), "u1" -> User())
 
 
-  val i0 = Article(categories = Some(List("c0", "c1")))
-  val i1 = Article(categories = None)
-  val i2 = Article(categories = Some(List("c0", "c2")))
+  val i0 = Article(categories = Some(List("c0", "c1")), tags = None)
+  val i1 = Article(categories = None, tags = Some(List("t1", "t2")))
+  val i2 = Article(categories = Some(List("c0", "c2")), tags = Some(List("t0", "t1")))
 
   val articles = Map(
     "i0" -> i0,
@@ -128,7 +128,8 @@ class CMSAlgorithmTest
         num = 5,
         categories = Some(Set("c0")),
         whiteList = None,
-        blackList = None),
+        blackList = None,
+        tags = Some(Set("t1"))),
       whiteList = None,
       blackList = Set()
     )
@@ -150,7 +151,8 @@ class CMSAlgorithmTest
         num = 5,
         categories = None,
         whiteList = None,
-        blackList = None),
+        blackList = None,
+        tags = None),
       whiteList = None,
       blackList = Set()
     )
@@ -173,7 +175,8 @@ class CMSAlgorithmTest
         num = 5,
         categories = Some(Set("c0")),
         whiteList = None,
-        blackList = None),
+        blackList = None,
+        tags = None),
       whiteList = None,
       blackList = Set()
     )
