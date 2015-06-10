@@ -12,9 +12,9 @@ class PreparatorTest
     "u1" -> User()
   )
 
-  val items = Map(
-    "i0" -> Item(categories = Some(List("c0", "c1"))),
-    "i1" -> Item(categories = None)
+  val articles = Map(
+    "i0" -> Article(categories = Some(List("c0", "c1"))),
+    "i1" -> Article(categories = None)
   )
 
   val view = Seq(
@@ -23,10 +23,22 @@ class PreparatorTest
     ViewEvent("u1", "i1", 1000030)
   )
 
-  val buy = Seq(
-    BuyEvent("u0", "i0", 1000020),
-    BuyEvent("u0", "i1", 1000030),
-    BuyEvent("u1", "i1", 1000040)
+  val share = Seq(
+    ShareEvent("u0", "i0", 1000020),
+    ShareEvent("u0", "i1", 1000030),
+    ShareEvent("u1", "i1", 1000040)
+  )
+
+  val like = Seq(
+    LikeEvent("u0", "i0", 1000020),
+    LikeEvent("u0", "i1", 1000030),
+    LikeEvent("u1", "i1", 1000040)
+  )
+
+  val rate = Seq(
+    RateEvent("u0", "i0", 1000020),
+    RateEvent("u0", "i1", 1000030),
+    RateEvent("u1", "i1", 1000040)
   )
 
   // simple test for demonstration purpose
@@ -34,16 +46,21 @@ class PreparatorTest
 
     val trainingData = new TrainingData(
       users = sc.parallelize(users.toSeq),
-      items = sc.parallelize(items.toSeq),
+      articles = sc.parallelize(articles.toSeq),
       viewEvents = sc.parallelize(view.toSeq),
-      buyEvents = sc.parallelize(buy.toSeq)
+      likeEvents = sc.parallelize(like.toSeq),
+      shareEvents = sc.parallelize(share.toSeq),
+      rateEvents = sc.parallelize(rate.toSeq)
+
     )
 
     val preparedData = preparator.prepare(sc, trainingData)
 
     preparedData.users.collect should contain theSameElementsAs users
-    preparedData.items.collect should contain theSameElementsAs items
+    preparedData.articles.collect should contain theSameElementsAs articles
     preparedData.viewEvents.collect should contain theSameElementsAs view
-    preparedData.buyEvents.collect should contain theSameElementsAs buy
+    preparedData.likeEvents.collect should contain theSameElementsAs like
+    preparedData.shareEvents.collect should contain theSameElementsAs share
+    preparedData.rateEvents.collect should contain theSameElementsAs rate
   }
 }

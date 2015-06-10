@@ -7,33 +7,33 @@ import io.prediction.data.storage.BiMap
 
 import org.apache.spark.mllib.recommendation.{Rating => MLlibRating}
 
-class ECommAlgorithmTest
+class CMSAlgorithmTest
   extends FlatSpec with EngineTestSparkContext with Matchers {
 
-  val algorithmParams = new ECommAlgorithmParams(
+  val algorithmParams = new CMSAlgorithmParams(
     appName = "test-app",
     unseenOnly = true,
-    seenEvents = List("buy", "view"),
+    seenEvents = List("like", "view", "share", "rate"),
     similarEvents = List("view"),
     rank = 10,
     numIterations = 20,
     lambda = 0.01,
     seed = Some(3)
   )
-  val algorithm = new ECommAlgorithm(algorithmParams)
+  val algorithm = new CMSAlgorithm(algorithmParams)
 
   val userStringIntMap = BiMap(Map("u0" -> 0, "u1" -> 1))
 
-  val itemStringIntMap = BiMap(Map("i0" -> 0, "i1" -> 1, "i2" -> 2))
+  val articleStringIntMap = BiMap(Map("i0" -> 0, "i1" -> 1, "i2" -> 2))
 
   val users = Map("u0" -> User(), "u1" -> User())
 
 
-  val i0 = Item(categories = Some(List("c0", "c1")))
-  val i1 = Item(categories = None)
-  val i2 = Item(categories = Some(List("c0", "c2")))
+  val i0 = Article(categories = Some(List("c0", "c1")))
+  val i1 = Article(categories = None)
+  val i2 = Article(categories = Some(List("c0", "c2")))
 
-  val items = Map(
+  val articles = Map(
     "i0" -> i0,
     "i1" -> i1,
     "i2" -> i2
@@ -47,10 +47,22 @@ class ECommAlgorithmTest
     ViewEvent("u1", "i2", 1000040)
   )
 
-  val buy = Seq(
-    BuyEvent("u0", "i0", 1000020),
-    BuyEvent("u0", "i1", 1000030),
-    BuyEvent("u1", "i1", 1000040)
+  val like = Seq(
+    LikeEvent("u0", "i0", 1000020),
+    LikeEvent("u0", "i1", 1000030),
+    LikeEvent("u1", "i1", 1000040)
+  )
+
+  val share = Seq(
+    ShareEvent("u0", "i0", 1000020),
+    ShareEvent("u0", "i1", 1000030),
+    ShareEvent("u1", "i1", 1000040)
+  )
+
+  val rate = Seq(
+    RateEvent("u0", "i0", 1000020),
+    RateEvent("u0", "i1", 1000030),
+    RateEvent("u1", "i1", 1000040)
   )
 
 
@@ -58,14 +70,16 @@ class ECommAlgorithmTest
 
     val preparedData = new PreparedData(
       users = sc.parallelize(users.toSeq),
-      items = sc.parallelize(items.toSeq),
+      articles = sc.parallelize(articles.toSeq),
       viewEvents = sc.parallelize(view.toSeq),
-      buyEvents = sc.parallelize(buy.toSeq)
+      likeEvents = sc.parallelize(like.toSeq),
+      shareEvents = sc.parallelize(share.toSeq),
+      rateEvents = sc.parallelize(rate.toSeq)
     )
 
     val mllibRatings = algorithm.genMLlibRating(
       userStringIntMap = userStringIntMap,
-      itemStringIntMap = itemStringIntMap,
+      articleStringIntMap = articleStringIntMap,
       data = preparedData
     )
 
@@ -82,14 +96,16 @@ class ECommAlgorithmTest
   "ECommAlgorithm.trainDefault()" should "return popular count for each item" in {
     val preparedData = new PreparedData(
       users = sc.parallelize(users.toSeq),
-      items = sc.parallelize(items.toSeq),
+      articles = sc.parallelize(articles.toSeq),
       viewEvents = sc.parallelize(view.toSeq),
-      buyEvents = sc.parallelize(buy.toSeq)
+      likeEvents = sc.parallelize(like.toSeq),
+      shareEvents = sc.parallelize(share.toSeq),
+      rateEvents = sc.parallelize(rate.toSeq)
     )
 
     val popCount = algorithm.trainDefault(
       userStringIntMap = userStringIntMap,
-      itemStringIntMap = itemStringIntMap,
+      articleStringIntMap = articleStringIntMap,
       data = preparedData
     )
 
@@ -98,14 +114,14 @@ class ECommAlgorithmTest
     popCount should contain theSameElementsAs expected
   }
 
-  "ECommAlgorithm.predictKnownuser()" should "return top item" in {
+  "ECommAlgorithm.predictKnownuser()" should "return top article" in {
 
     val top = algorithm.predictKnownUser(
       userFeature = Array(1.0, 2.0, 0.5),
-      productModels = Map(
-        0 -> ProductModel(i0, Some(Array(2.0, 1.0, 2.0)), 3),
-        1 -> ProductModel(i1, Some(Array(3.0, 0.5, 1.0)), 4),
-        2 -> ProductModel(i2, Some(Array(1.0, 3.0, 1.0)), 1)
+      articleModels = Map(
+        0 -> ArticleModel(i0, Some(Array(2.0, 1.0, 2.0)), 3),
+        1 -> ArticleModel(i1, Some(Array(3.0, 0.5, 1.0)), 4),
+        2 -> ArticleModel(i2, Some(Array(1.0, 3.0, 1.0)), 1)
       ),
       query = Query(
         user = "u0",
@@ -121,13 +137,13 @@ class ECommAlgorithmTest
     top shouldBe expected
   }
 
-  "ECommAlgorithm.predictDefault()" should "return top item" in {
+  "ECommAlgorithm.predictDefault()" should "return top article" in {
 
     val top = algorithm.predictDefault(
-      productModels = Map(
-        0 -> ProductModel(i0, Some(Array(2.0, 1.0, 2.0)), 3),
-        1 -> ProductModel(i1, Some(Array(3.0, 0.5, 1.0)), 4),
-        2 -> ProductModel(i2, Some(Array(1.0, 3.0, 1.0)), 1)
+      articleModels = Map(
+        0 -> ArticleModel(i0, Some(Array(2.0, 1.0, 2.0)), 3),
+        1 -> ArticleModel(i1, Some(Array(3.0, 0.5, 1.0)), 4),
+        2 -> ArticleModel(i2, Some(Array(1.0, 3.0, 1.0)), 1)
       ),
       query = Query(
         user = "u0",
@@ -143,14 +159,14 @@ class ECommAlgorithmTest
     top shouldBe expected
   }
 
-  "ECommAlgorithm.predictSimilar()" should "return top item" in {
+  "ECommAlgorithm.predictSimilar()" should "return top article" in {
 
     val top = algorithm.predictSimilar(
       recentFeatures = Vector(Array(1.0, 2.0, 0.5), Array(1.0, 0.2, 0.3)),
-      productModels = Map(
-        0 -> ProductModel(i0, Some(Array(2.0, 1.0, 2.0)), 3),
-        1 -> ProductModel(i1, Some(Array(3.0, 0.5, 1.0)), 4),
-        2 -> ProductModel(i2, Some(Array(1.0, 3.0, 1.0)), 1)
+      articleModels = Map(
+        0 -> ArticleModel(i0, Some(Array(2.0, 1.0, 2.0)), 3),
+        1 -> ArticleModel(i1, Some(Array(3.0, 0.5, 1.0)), 4),
+        2 -> ArticleModel(i2, Some(Array(1.0, 3.0, 1.0)), 1)
       ),
       query = Query(
         user = "u0",
