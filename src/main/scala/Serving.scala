@@ -1,4 +1,4 @@
-package org.template.ecommercerecommendation
+package org.template.cmsrecommendation
 
 import io.prediction.controller.LServing
 

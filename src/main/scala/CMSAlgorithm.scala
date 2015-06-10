@@ -1,4 +1,4 @@
-package org.template.ecommercerecommendation
+package org.template.cmsrecommendation
 
 import io.prediction.controller.P2LAlgorithm
 import io.prediction.controller.Params
@@ -18,7 +18,7 @@ import scala.collection.mutable.PriorityQueue
 import scala.concurrent.duration.Duration
 import scala.concurrent.ExecutionContext.Implicits.global
 
-case class ECommAlgorithmParams(
+case class CMSAlgorithmParams(
   appName: String,
   unseenOnly: Boolean,
   seenEvents: List[String],
@@ -30,41 +30,41 @@ case class ECommAlgorithmParams(
 ) extends Params
 
 
-case class ProductModel(
-  item: Item,
+case class ArticleModel(
+  article: Article,
   features: Option[Array[Double]], // features by ALS
   count: Int // popular count for default score
 )
 
-class ECommModel(
+class CMSAlgorithmModel(
   val rank: Int,
   val userFeatures: Map[Int, Array[Double]],
-  val productModels: Map[Int, ProductModel],
+  val articleModels: Map[Int, ArticleModel],
   val userStringIntMap: BiMap[String, Int],
-  val itemStringIntMap: BiMap[String, Int]
+  val articleStringIntMap: BiMap[String, Int]
 ) extends Serializable {
 
-  @transient lazy val itemIntStringMap = itemStringIntMap.inverse
+  @transient lazy val articleIntStringMap = articleStringIntMap.inverse
 
   override def toString = {
     s" rank: ${rank}" +
     s" userFeatures: [${userFeatures.size}]" +
     s"(${userFeatures.take(2).toList}...)" +
-    s" productModels: [${productModels.size}]" +
-    s"(${productModels.take(2).toList}...)" +
+    s" articleModels: [${articleModels.size}]" +
+    s"(${articleModels.take(2).toList}...)" +
     s" userStringIntMap: [${userStringIntMap.size}]" +
     s"(${userStringIntMap.take(2).toString}...)]" +
-    s" itemStringIntMap: [${itemStringIntMap.size}]" +
-    s"(${itemStringIntMap.take(2).toString}...)]"
+    s" articleStringIntMap: [${articleStringIntMap.size}]" +
+    s"(${articleStringIntMap.take(2).toString}...)]"
   }
 }
 
-class ECommAlgorithm(val ap: ECommAlgorithmParams)
-  extends P2LAlgorithm[PreparedData, ECommModel, Query, PredictedResult] {
+class CMSAlgorithm(val ap: CMSAlgorithmParams)
+  extends P2LAlgorithm[PreparedData, CMSAlgorithmModel, Query, PredictedResult] {
 
   @transient lazy val logger = Logger[this.type]
 
-  def train(sc: SparkContext, data: PreparedData): ECommModel = {
+  def train(sc: SparkContext, data: PreparedData): CMSAlgorithmModel = {
     require(!data.viewEvents.take(1).isEmpty,
       s"viewEvents in PreparedData cannot be empty." +
       " Please check if DataSource generates TrainingData" +
@@ -73,24 +73,24 @@ class ECommAlgorithm(val ap: ECommAlgorithmParams)
       s"users in PreparedData cannot be empty." +
       " Please check if DataSource generates TrainingData" +
       " and Preprator generates PreparedData correctly.")
-    require(!data.items.take(1).isEmpty,
-      s"items in PreparedData cannot be empty." +
+    require(!data.articles.take(1).isEmpty,
+      s"articles in PreparedData cannot be empty." +
       " Please check if DataSource generates TrainingData" +
       " and Preprator generates PreparedData correctly.")
-    // create User and item's String ID to integer index BiMap
+    // create User and article's String ID to integer index BiMap
     val userStringIntMap = BiMap.stringInt(data.users.keys)
-    val itemStringIntMap = BiMap.stringInt(data.items.keys)
+    val articleStringIntMap = BiMap.stringInt(data.articles.keys)
 
     val mllibRatings: RDD[MLlibRating] = genMLlibRating(
       userStringIntMap = userStringIntMap,
-      itemStringIntMap = itemStringIntMap,
+      articleStringIntMap = articleStringIntMap,
       data = data
     )
 
     // MLLib ALS cannot handle empty training data.
     require(!mllibRatings.take(1).isEmpty,
       s"mllibRatings cannot be empty." +
-      " Please check if your events contain valid user and item ID.")
+      " Please check if your events contain valid user and article ID.")
 
     // seed for MLlib ALS
     val seed = ap.seed.getOrElse(System.nanoTime)
@@ -108,37 +108,37 @@ class ECommAlgorithm(val ap: ECommAlgorithmParams)
     val userFeatures = m.userFeatures.collectAsMap.toMap
 
     // convert ID to Int index
-    val items = data.items.map { case (id, item) =>
-      (itemStringIntMap(id), item)
+    val articles = data.articles.map { case (id, article) =>
+      (articleStringIntMap(id), article)
     }
 
-    // join item with the trained productFeatures
-    val productFeatures: Map[Int, (Item, Option[Array[Double]])] =
-      items.leftOuterJoin(m.productFeatures).collectAsMap.toMap
+    // join article with the trained productFeatures
+    val productFeatures: Map[Int, (Article, Option[Array[Double]])] =
+      articles.leftOuterJoin(m.productFeatures).collectAsMap.toMap
 
     val popularCount = trainDefault(
       userStringIntMap = userStringIntMap,
-      itemStringIntMap = itemStringIntMap,
+      articleStringIntMap = articleStringIntMap,
       data = data
     )
 
-    val productModels: Map[Int, ProductModel] = productFeatures
-      .map { case (index, (item, features)) =>
-        val pm = ProductModel(
-          item = item,
+    val articleModels: Map[Int, ArticleModel] = productFeatures
+      .map { case (index, (article, features)) =>
+        val pm = ArticleModel(
+          article = article,
           features = features,
-          // NOTE: use getOrElse because popularCount may not contain all items.
+          // NOTE: use getOrElse because popularCount may not contain all articles.
           count = popularCount.getOrElse(index, 0)
         )
         (index, pm)
       }
 
-    new ECommModel(
+    new CMSAlgorithmModel(
       rank = m.rank,
       userFeatures = userFeatures,
-      productModels = productModels,
+      articleModels = articleModels,
       userStringIntMap = userStringIntMap,
-      itemStringIntMap = itemStringIntMap
+      articleStringIntMap = articleStringIntMap
     )
   }
 
@@ -147,21 +147,21 @@ class ECommAlgorithm(val ap: ECommAlgorithmParams)
     */
   def genMLlibRating(
     userStringIntMap: BiMap[String, Int],
-    itemStringIntMap: BiMap[String, Int],
+    articleStringIntMap: BiMap[String, Int],
     data: PreparedData): RDD[MLlibRating] = {
 
     val mllibRatings = data.viewEvents
       .map { r =>
-        // Convert user and item String IDs to Int index for MLlib
+        // Convert user and article String IDs to Int index for MLlib
         val uindex = userStringIntMap.getOrElse(r.user, -1)
-        val iindex = itemStringIntMap.getOrElse(r.item, -1)
+        val iindex = articleStringIntMap.getOrElse(r.article, -1)
 
         if (uindex == -1)
           logger.info(s"Couldn't convert nonexistent user ID ${r.user}"
             + " to Int index.")
 
         if (iindex == -1)
-          logger.info(s"Couldn't convert nonexistent item ID ${r.item}"
+          logger.info(s"Couldn't convert nonexistent item ID ${r.article}"
             + " to Int index.")
 
         ((uindex, iindex), 1)
@@ -186,22 +186,22 @@ class ECommAlgorithm(val ap: ECommAlgorithmParams)
     */
   def trainDefault(
     userStringIntMap: BiMap[String, Int],
-    itemStringIntMap: BiMap[String, Int],
+    articleStringIntMap: BiMap[String, Int],
     data: PreparedData): Map[Int, Int] = {
     // count number of buys
     // (item index, count)
-    val buyCountsRDD: RDD[(Int, Int)] = data.buyEvents
+    val likeCountsRDD: RDD[(Int, Int)] = data.likeEvents
       .map { r =>
         // Convert user and item String IDs to Int index
         val uindex = userStringIntMap.getOrElse(r.user, -1)
-        val iindex = itemStringIntMap.getOrElse(r.item, -1)
+        val iindex = articleStringIntMap.getOrElse(r.article, -1)
 
         if (uindex == -1)
           logger.info(s"Couldn't convert nonexistent user ID ${r.user}"
             + " to Int index.")
 
         if (iindex == -1)
-          logger.info(s"Couldn't convert nonexistent item ID ${r.item}"
+          logger.info(s"Couldn't convert nonexistent item ID ${r.article}"
             + " to Int index.")
 
         (uindex, iindex, 1)
@@ -213,22 +213,22 @@ class ECommAlgorithm(val ap: ECommAlgorithmParams)
       .map { case (u, i, v) => (i, 1) } // key is item
       .reduceByKey{ case (a, b) => a + b } // count number of items occurrence
 
-    buyCountsRDD.collectAsMap.toMap
+    likeCountsRDD.collectAsMap.toMap
   }
 
-  def predict(model: ECommModel, query: Query): PredictedResult = {
+  def predict(model: CMSAlgorithmModel, query: Query): PredictedResult = {
 
     val userFeatures = model.userFeatures
-    val productModels = model.productModels
+    val articleModels = model.articleModels
 
     // convert whiteList's string ID to integer index
     val whiteList: Option[Set[Int]] = query.whiteList.map( set =>
-      set.flatMap(model.itemStringIntMap.get(_))
+      set.flatMap(model.articleStringIntMap.get(_))
     )
 
     val finalBlackList: Set[Int] = genBlackList(query = query)
-      // convert seen Items list from String ID to interger Index
-      .flatMap(x => model.itemStringIntMap.get(x))
+      // convert seen Articles list from String ID to interger Index
+      .flatMap(x => model.articleStringIntMap.get(x))
 
     val userFeature: Option[Array[Double]] =
       model.userStringIntMap.get(query.user).flatMap { userIndex =>
@@ -239,7 +239,7 @@ class ECommAlgorithm(val ap: ECommAlgorithmParams)
       // the user has feature vector
       predictKnownUser(
         userFeature = userFeature.get,
-        productModels = productModels,
+        articleModels = articleModels,
         query = query,
         whiteList = whiteList,
         blackList = finalBlackList
@@ -250,20 +250,20 @@ class ECommAlgorithm(val ap: ECommAlgorithmParams)
       logger.info(s"No userFeature found for user ${query.user}.")
 
       // check if the user has recent events on some items
-      val recentItems: Set[String] = getRecentItems(query)
-      val recentList: Set[Int] = recentItems.flatMap (x =>
-        model.itemStringIntMap.get(x))
+      val recentArticles: Set[String] = getRecentArticles(query)
+      val recentList: Set[Int] = recentArticles.flatMap (x =>
+        model.articleStringIntMap.get(x))
 
       val recentFeatures: Vector[Array[Double]] = recentList.toVector
-        // productModels may not contain the requested item
+        // articleModels may not contain the requested item
         .map { i =>
-          productModels.get(i).flatMap { pm => pm.features }
+          articleModels.get(i).flatMap { pm => pm.features }
         }.flatten
 
       if (recentFeatures.isEmpty) {
-        logger.info(s"No features vector for recent items ${recentItems}.")
+        logger.info(s"No features vector for recent items ${recentArticles}.")
         predictDefault(
-          productModels = productModels,
+          articleModels = articleModels,
           query = query,
           whiteList = whiteList,
           blackList = finalBlackList
@@ -271,7 +271,7 @@ class ECommAlgorithm(val ap: ECommAlgorithmParams)
       } else {
         predictSimilar(
           recentFeatures = recentFeatures,
-          productModels = productModels,
+          articleModels = articleModels,
           query = query,
           whiteList = whiteList,
           blackList = finalBlackList
@@ -279,21 +279,21 @@ class ECommAlgorithm(val ap: ECommAlgorithmParams)
       }
     }
 
-    val itemScores = topScores.map { case (i, s) =>
-      new ItemScore(
+    val articleScores = topScores.map { case (i, s) =>
+      new ArticleScore(
         // convert item int index back to string ID
-        item = model.itemIntStringMap(i),
+        article = model.articleStringIntMap(i),
         score = s
       )
     }
 
-    new PredictedResult(itemScores)
+    new PredictedResult(articleScores)
   }
 
   /** Generate final blackList based on other constraints */
   def genBlackList(query: Query): Set[String] = {
     // if unseenOnly is True, get all seen items
-    val seenItems: Set[String] = if (ap.unseenOnly) {
+    val seenArticles: Set[String] = if (ap.unseenOnly) {
 
       // get all user item events which are considered as "seen" events
       val seenEvents: Iterator[Event] = try {
@@ -330,12 +330,12 @@ class ECommAlgorithm(val ap: ECommAlgorithmParams)
       Set[String]()
     }
 
-    // get the latest constraint unavailableItems $set event
-    val unavailableItems: Set[String] = try {
+    // get the latest constraint unavailableArticles $set event
+    val unavailableArticles: Set[String] = try {
       val constr = LEventStore.findByEntity(
         appName = ap.appName,
         entityType = "constraint",
-        entityId = "unavailableItems",
+        entityId = "unavailableArticles",
         eventNames = Some(Seq("$set")),
         limit = Some(1),
         latest = true,
@@ -348,21 +348,21 @@ class ECommAlgorithm(val ap: ECommAlgorithmParams)
       }
     } catch {
       case e: scala.concurrent.TimeoutException =>
-        logger.error(s"Timeout when read set unavailableItems event." +
+        logger.error(s"Timeout when read set unavailableArticles event." +
           s" Empty list is used. ${e}")
         Set[String]()
       case e: Exception =>
-        logger.error(s"Error when read set unavailableItems event: ${e}")
+        logger.error(s"Error when read set unavailableArticles event: ${e}")
         throw e
     }
 
-    // combine query's blackList,seenItems and unavailableItems
+    // combine query's blackList,seenArticles and unavailableArticles
     // into final blackList.
-    query.blackList.getOrElse(Set[String]()) ++ seenItems ++ unavailableItems
+    query.blackList.getOrElse(Set[String]()) ++ seenArticles ++ unavailableArticles
   }
 
   /** Get recent events of the user on items for recommending similar items */
-  def getRecentItems(query: Query): Set[String] = {
+  def getRecentArticles(query: Query): Set[String] = {
     // get latest 10 user view item events
     val recentEvents = try {
       LEventStore.findByEntity(
@@ -387,7 +387,7 @@ class ECommAlgorithm(val ap: ECommAlgorithmParams)
         throw e
     }
 
-    val recentItems: Set[String] = recentEvents.map { event =>
+    val recentArticles: Set[String] = recentEvents.map { event =>
       try {
         event.targetEntityId.get
       } catch {
@@ -398,23 +398,23 @@ class ECommAlgorithm(val ap: ECommAlgorithmParams)
       }
     }.toSet
 
-    recentItems
+    recentArticles
   }
 
   /** Prediction for user with known feature vector */
   def predictKnownUser(
     userFeature: Array[Double],
-    productModels: Map[Int, ProductModel],
+    articleModels: Map[Int, ArticleModel],
     query: Query,
     whiteList: Option[Set[Int]],
     blackList: Set[Int]
   ): Array[(Int, Double)] = {
-    val indexScores: Map[Int, Double] = productModels.par // convert to parallel collection
+    val indexScores: Map[Int, Double] = articleModels.par // convert to parallel collection
       .filter { case (i, pm) =>
         pm.features.isDefined &&
-        isCandidateItem(
+        isCandidateArticle(
           i = i,
-          item = pm.item,
+          article = pm.article,
           categories = query.categories,
           whiteList = whiteList,
           blackList = blackList
@@ -437,16 +437,16 @@ class ECommAlgorithm(val ap: ECommAlgorithmParams)
 
   /** Default prediction when know nothing about the user */
   def predictDefault(
-    productModels: Map[Int, ProductModel],
+    articleModels: Map[Int, ArticleModel],
     query: Query,
     whiteList: Option[Set[Int]],
     blackList: Set[Int]
   ): Array[(Int, Double)] = {
-    val indexScores: Map[Int, Double] = productModels.par // convert back to sequential collection
+    val indexScores: Map[Int, Double] = articleModels.par // convert back to sequential collection
       .filter { case (i, pm) =>
-        isCandidateItem(
+        isCandidateArticle(
           i = i,
-          item = pm.item,
+          article = pm.article,
           categories = query.categories,
           whiteList = whiteList,
           blackList = blackList
@@ -467,17 +467,17 @@ class ECommAlgorithm(val ap: ECommAlgorithmParams)
   /** Return top similar items based on items user recently has action on */
   def predictSimilar(
     recentFeatures: Vector[Array[Double]],
-    productModels: Map[Int, ProductModel],
+    articleModels: Map[Int, ArticleModel],
     query: Query,
     whiteList: Option[Set[Int]],
     blackList: Set[Int]
   ): Array[(Int, Double)] = {
-    val indexScores: Map[Int, Double] = productModels.par // convert to parallel collection
+    val indexScores: Map[Int, Double] = articleModels.par // convert to parallel collection
       .filter { case (i, pm) =>
         pm.features.isDefined &&
-        isCandidateItem(
+        isCandidateArticle(
           i = i,
-          item = pm.item,
+          article = pm.article,
           categories = query.categories,
           whiteList = whiteList,
           blackList = blackList
@@ -491,7 +491,7 @@ class ECommAlgorithm(val ap: ECommAlgorithmParams)
         // may customize here to further adjust score
         (i, s)
       }
-      .filter(_._2 > 0) // keep items with score > 0
+      .filter(_._2 > 0) // keep articles with score > 0
       .seq // convert back to sequential collection
 
     val ord = Ordering.by[(Int, Double), Double](_._2).reverse
@@ -550,9 +550,9 @@ class ECommAlgorithm(val ap: ECommAlgorithmParams)
   }
 
   private
-  def isCandidateItem(
+  def isCandidateArticle(
     i: Int,
-    item: Item,
+    article: Article,
     categories: Option[Set[String]],
     whiteList: Option[Set[Int]],
     blackList: Set[Int]
@@ -562,10 +562,10 @@ class ECommAlgorithm(val ap: ECommAlgorithmParams)
     !blackList.contains(i) &&
     // filter categories
     categories.map { cat =>
-      item.categories.map { itemCat =>
-        // keep this item if has ovelap categories with the query
-        !(itemCat.toSet.intersect(cat).isEmpty)
-      }.getOrElse(false) // discard this item if it has no categories
+      article.categories.map { articleCat =>
+        // keep this article if has ovelap categories with the query
+        !(articleCat.toSet.intersect(cat).isEmpty)
+      }.getOrElse(false) // discard this article if it has no categories
     }.getOrElse(true)
 
   }

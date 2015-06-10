@@ -1,4 +1,4 @@
-package org.template.ecommercerecommendation
+package org.template.cmsrecommendation
 
 import io.prediction.controller.IEngineFactory
 import io.prediction.controller.Engine
@@ -12,20 +12,20 @@ case class Query(
 ) extends Serializable
 
 case class PredictedResult(
-  itemScores: Array[ItemScore]
+  articleScores: Array[ArticleScore]
 ) extends Serializable
 
-case class ItemScore(
-  item: String,
+case class ArticleScore(
+  article: String,
   score: Double
 ) extends Serializable
 
-object ECommerceRecommendationEngine extends IEngineFactory {
+object CMSRecommendationEngine extends IEngineFactory {
   def apply() = {
     new Engine(
       classOf[DataSource],
       classOf[Preparator],
-      Map("ecomm" -> classOf[ECommAlgorithm]),
+      Map("cms" -> classOf[CMSAlgorithm]),
       classOf[Serving])
   }
 }

@@ -1,4 +1,4 @@
-package org.template.ecommercerecommendation
+package org.template.cmsrecommendation
 
 import io.prediction.controller.PDataSource
 import io.prediction.controller.EmptyEvaluationInfo
@@ -42,9 +42,9 @@ class DataSource(val dsp: DataSourceParams)
     }.cache()
 
     // create a RDD of (entityID, Item)
-    val itemsRDD: RDD[(String, Item)] = PEventStore.aggregateProperties(
+    val articleRDD: RDD[(String, Article)] = PEventStore.aggregateProperties(
       appName = dsp.appName,
-      entityType = "item"
+      entityType = "article"
     )(sc).map { case (entityId, properties) =>
       val item = try {
         // Assume categories is optional property of item.
@@ -62,7 +62,7 @@ class DataSource(val dsp: DataSourceParams)
     val eventsRDD: RDD[Event] = PEventStore.find(
       appName = dsp.appName,
       entityType = Some("user"),
-      eventNames = Some(List("view", "buy")),
+      eventNames = Some(List("view", "like", "share", "rate")),
       // targetEntityType is optional field of an event.
       targetEntityType = Some(Some("item")))(sc)
       .cache()
@@ -84,50 +84,96 @@ class DataSource(val dsp: DataSourceParams)
         }
       }
 
-    val buyEventsRDD: RDD[BuyEvent] = eventsRDD
-      .filter { event => event.event == "buy" }
+    val likeEventsRDD: RDD[LikeEvent] = eventsRDD
+      .filter { event => event.event == "like" }
       .map { event =>
         try {
-          BuyEvent(
+          LikeEvent(
             user = event.entityId,
             item = event.targetEntityId.get,
             t = event.eventTime.getMillis
           )
         } catch {
           case e: Exception =>
-            logger.error(s"Cannot convert ${event} to BuyEvent." +
+            logger.error(s"Cannot convert ${event} to LikeEvent." +
               s" Exception: ${e}.")
             throw e
         }
       }
 
+    val shareEventsRDD: RDD[ShareEvent] = eventsRDD
+      .filter { event => event.event == "share" }
+      .map { event =>
+      try {
+        ShareEvent(
+          user = event.entityId,
+          item = event.targetEntityId.get,
+          t = event.eventTime.getMillis
+        )
+      } catch {
+        case e: Exception =>
+          logger.error(s"Cannot convert ${event} to ShareEvent." +
+            s" Exception: ${e}.")
+          throw e
+      }
+    }
+
+    val rateEventsRDD: RDD[RateEvent] = eventsRDD
+      .filter { event => event.event == "rate" }
+      .map { event =>
+      try {
+        RateEvent(
+          user = event.entityId,
+          item = event.targetEntityId.get,
+          t = event.eventTime.getMillis
+        )
+      } catch {
+        case e: Exception =>
+          logger.error(s"Cannot convert ${event} to RateEvent." +
+            s" Exception: ${e}.")
+          throw e
+      }
+    }
+
     new TrainingData(
       users = usersRDD,
-      items = itemsRDD,
+      articles = articleRDD,
       viewEvents = viewEventsRDD,
-      buyEvents = buyEventsRDD
+      likeEvents = likeEventsRDD,
+      shareEvents = shareEventsRDD,
+      rateEvents = rateEventsRDD
     )
   }
 }
 
 case class User()
 
-case class Item(categories: Option[List[String]])
+case class Article(categories: Option[List[String]])
 
-case class ViewEvent(user: String, item: String, t: Long)
+case class ViewEvent(user: String, article: String, t: Long)
 
-case class BuyEvent(user: String, item: String, t: Long)
+case class LikeEvent(user: String, article: String, t: Long)
+
+case class ShareEvent(user: String, article: String, t: Long)
+
+case class RateEvent(user: String, article: String, t: Long)
 
 class TrainingData(
   val users: RDD[(String, User)],
-  val items: RDD[(String, Item)],
+  val articles: RDD[(String, Article)],
   val viewEvents: RDD[ViewEvent],
-  val buyEvents: RDD[BuyEvent]
+  val likeEvents: RDD[LikeEvent],
+  val shareEvents: RDD[ShareEvent],
+  val rateEvents: RDD[RateEvent]
+
 ) extends Serializable {
   override def toString = {
     s"users: [${users.count()} (${users.take(2).toList}...)]" +
-    s"items: [${items.count()} (${items.take(2).toList}...)]" +
+    s"articles: [${articles.count()} (${articles.take(2).toList}...)]" +
     s"viewEvents: [${viewEvents.count()}] (${viewEvents.take(2).toList}...)" +
-    s"buyEvents: [${buyEvents.count()}] (${buyEvents.take(2).toList}...)"
+    s"likeEvents: [${likeEvents.count()}] (${likeEvents.take(2).toList}...)" +
+    s"shareEvents: [${shareEvents.count()}] (${shareEvents.take(2).toList}...)" +
+    s"rateEvents: [${rateEvents.count()}] (${rateEvents.take(2).toList}...)"
+
   }
 }
