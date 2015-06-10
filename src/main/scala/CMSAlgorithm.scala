@@ -417,7 +417,8 @@ class CMSAlgorithm(val ap: CMSAlgorithmParams)
           article = pm.article,
           categories = query.categories,
           whiteList = whiteList,
-          blackList = blackList
+          blackList = blackList,
+          tags = query.tags
         )
       }
       .map { case (i, pm) =>
@@ -449,7 +450,8 @@ class CMSAlgorithm(val ap: CMSAlgorithmParams)
           article = pm.article,
           categories = query.categories,
           whiteList = whiteList,
-          blackList = blackList
+          blackList = blackList,
+          tags = query.tags
         )
       }
       .map { case (i, pm) =>
@@ -480,7 +482,8 @@ class CMSAlgorithm(val ap: CMSAlgorithmParams)
           article = pm.article,
           categories = query.categories,
           whiteList = whiteList,
-          blackList = blackList
+          blackList = blackList,
+          tags = query.tags
         )
       }
       .map { case (i, pm) =>
@@ -555,7 +558,8 @@ class CMSAlgorithm(val ap: CMSAlgorithmParams)
     article: Article,
     categories: Option[Set[String]],
     whiteList: Option[Set[Int]],
-    blackList: Set[Int]
+    blackList: Set[Int],
+    tags: Option[Set[String]]
   ): Boolean = {
     // can add other custom filtering here
     whiteList.map(_.contains(i)).getOrElse(true) &&
@@ -566,6 +570,13 @@ class CMSAlgorithm(val ap: CMSAlgorithmParams)
         // keep this article if has ovelap categories with the query
         !(articleCat.toSet.intersect(cat).isEmpty)
       }.getOrElse(false) // discard this article if it has no categories
+    }.getOrElse(true) &&
+    // filter tags
+    tags.map { tag =>
+      article.tags.map { articleTag =>
+        // keep this article if has ovelap tags with the query
+        !(articleTag.toSet.intersect(tag).isEmpty)
+      }.getOrElse(false) // discard this article if it has no tags
     }.getOrElse(true)
 
   }
