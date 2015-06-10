@@ -66,7 +66,7 @@ class CMSAlgorithmTest
   )
 
 
-  "ECommAlgorithm.genMLlibRating()" should "create RDD[MLlibRating] correctly" in {
+  "CMSAlgorithm.genMLlibRating()" should "create RDD[MLlibRating] correctly" in {
 
     val preparedData = new PreparedData(
       users = sc.parallelize(users.toSeq),
@@ -93,7 +93,7 @@ class CMSAlgorithmTest
     mllibRatings.collect should contain theSameElementsAs expected
   }
 
-  "ECommAlgorithm.trainDefault()" should "return popular count for each item" in {
+  "CMSAlgorithm.trainDefault()" should "return popular count for each item" in {
     val preparedData = new PreparedData(
       users = sc.parallelize(users.toSeq),
       articles = sc.parallelize(articles.toSeq),
@@ -114,7 +114,7 @@ class CMSAlgorithmTest
     popCount should contain theSameElementsAs expected
   }
 
-  "ECommAlgorithm.predictKnownuser()" should "return top article" in {
+  "CMSAlgorithm.predictKnownuser()" should "return top article" in {
 
     val top = algorithm.predictKnownUser(
       userFeature = Array(1.0, 2.0, 0.5),
@@ -129,7 +129,7 @@ class CMSAlgorithmTest
         categories = Some(Set("c0")),
         whiteList = None,
         blackList = None,
-        tags = Some(Set("t1"))),
+        tags = None),
       whiteList = None,
       blackList = Set()
     )
@@ -138,7 +138,7 @@ class CMSAlgorithmTest
     top shouldBe expected
   }
 
-  "ECommAlgorithm.predictDefault()" should "return top article" in {
+  "CMSAlgorithm.predictDefault()" should "return top article" in {
 
     val top = algorithm.predictDefault(
       articleModels = Map(
@@ -161,7 +161,7 @@ class CMSAlgorithmTest
     top shouldBe expected
   }
 
-  "ECommAlgorithm.predictSimilar()" should "return top article" in {
+  "CMSAlgorithm.predictSimilar()" should "return top article" in {
 
     val top = algorithm.predictSimilar(
       recentFeatures = Vector(Array(1.0, 2.0, 0.5), Array(1.0, 0.2, 0.3)),
