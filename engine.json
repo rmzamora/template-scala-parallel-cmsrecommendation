@@ -1,7 +1,7 @@
 {
   "id": "default",
   "description": "Default settings",
-  "engineFactory": "org.template.ecommercerecommendation.CMSRecommendationEngine",
+  "engineFactory": "org.template.cmsrecommendation.CMSRecommendationEngine",
   "datasource": {
     "params" : {
       "appName": "INVALID_APP_NAME"
