@@ -33,12 +33,31 @@ The template also supports black-list and whitelist. If a whitelist is provided,
 ###Output PredictedResult
 A ranked list of recommended articleIds
 
-###Install and Run PredictionIO
+###For full documentation please refer to [ecommercerecommendation](https://docs.prediction.io/templates/ecommercerecommendation/quickstart/) where this engine is based on.
 
-Follow the instructions [here](https://docs.prediction.io/templates/ecommercerecommendation/quickstart/)
+###Changes on installation
 
-###Create a new Engine from an Engine Template
+1). Create a new Engine from an Engine Template based from the document but replace the engine source to 'rmzamora/template-scala-parallel-cmsrecommendation'
 
-Follow the instrunction from ecommercerecommendation but replace the engine source to 'rmzamora/template-scala-parallel-cmsrecommendation'
+2).Changes to engine.json.
+
+```
+"algorithms": [
+ {
+   "name": "cms",
+   "params": {
+     "appName": "YOUR_APP_NAME",
+     "unseenOnly": false,
+     "seenEvents": ["like", "view", "share", "rate"],
+     "similarEvents": ["view"],
+     "rank": 10,
+     "numIterations" : 10,
+     "lambda": 0.01,
+     "seed": 3
+   }
+ }
+]
+```
+
 
 
