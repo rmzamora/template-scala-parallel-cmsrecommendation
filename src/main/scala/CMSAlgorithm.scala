@@ -161,18 +161,18 @@ class CMSAlgorithm(val ap: CMSAlgorithmParams)
             + " to Int index.")
 
         if (iindex == -1)
-          logger.info(s"Couldn't convert nonexistent item ID ${r.article}"
+          logger.info(s"Couldn't convert nonexistent article ID ${r.article}"
             + " to Int index.")
 
         ((uindex, iindex), 1)
       }
       .filter { case ((u, i), v) =>
-        // keep events with valid user and item index
+        // keep events with valid user and article index
         (u != -1) && (i != -1)
       }
-      .reduceByKey(_ + _) // aggregate all view events of same user-item pair
+      .reduceByKey(_ + _) // aggregate all view events of same user-article pair
       .map { case ((u, i), v) =>
-        // MLlibRating requires integer index for user and item
+        // MLlibRating requires integer index for user and article
         MLlibRating(u, i, v)
       }
       .cache()
@@ -182,17 +182,17 @@ class CMSAlgorithm(val ap: CMSAlgorithmParams)
 
   /** Train default model.
     * You may customize this function if use different events or
-    * need different ways to count "popular" score or return default score for item.
+    * need different ways to count "popular" score or return default score for article.
     */
   def trainDefault(
     userStringIntMap: BiMap[String, Int],
     articleStringIntMap: BiMap[String, Int],
     data: PreparedData): Map[Int, Int] = {
     // count number of buys
-    // (item index, count)
+    // (article index, count)
     val likeCountsRDD: RDD[(Int, Int)] = data.likeEvents
       .map { r =>
-        // Convert user and item String IDs to Int index
+        // Convert user and article String IDs to Int index
         val uindex = userStringIntMap.getOrElse(r.user, -1)
         val iindex = articleStringIntMap.getOrElse(r.article, -1)
 
@@ -201,17 +201,17 @@ class CMSAlgorithm(val ap: CMSAlgorithmParams)
             + " to Int index.")
 
         if (iindex == -1)
-          logger.info(s"Couldn't convert nonexistent item ID ${r.article}"
+          logger.info(s"Couldn't convert nonexistent article ID ${r.article}"
             + " to Int index.")
 
         (uindex, iindex, 1)
       }
       .filter { case (u, i, v) =>
-        // keep events with valid user and item index
+        // keep events with valid user and article index
         (u != -1) && (i != -1)
       }
-      .map { case (u, i, v) => (i, 1) } // key is item
-      .reduceByKey{ case (a, b) => a + b } // count number of items occurrence
+      .map { case (u, i, v) => (i, 1) } // key is article
+      .reduceByKey{ case (a, b) => a + b } // count number of articles occurrence
 
     likeCountsRDD.collectAsMap.toMap
   }
@@ -249,19 +249,19 @@ class CMSAlgorithm(val ap: CMSAlgorithmParams)
       // For example, new user is created after model is trained.
       logger.info(s"No userFeature found for user ${query.user}.")
 
-      // check if the user has recent events on some items
+      // check if the user has recent events on some articles
       val recentArticles: Set[String] = getRecentArticles(query)
       val recentList: Set[Int] = recentArticles.flatMap (x =>
         model.articleStringIntMap.get(x))
 
       val recentFeatures: Vector[Array[Double]] = recentList.toVector
-        // articleModels may not contain the requested item
+        // articleModels may not contain the requested article
         .map { i =>
           articleModels.get(i).flatMap { pm => pm.features }
         }.flatten
 
       if (recentFeatures.isEmpty) {
-        logger.info(s"No features vector for recent items ${recentArticles}.")
+        logger.info(s"No features vector for recent article ${recentArticles}.")
         predictDefault(
           articleModels = articleModels,
           query = query,
@@ -281,7 +281,7 @@ class CMSAlgorithm(val ap: CMSAlgorithmParams)
 
     val articleScores = topScores.map { case (i, s) =>
       new ArticleScore(
-        // convert item int index back to string ID
+        // convert article int index back to string ID
         article = model.articleIntStringMap(i),
         score = s
       )
@@ -292,17 +292,17 @@ class CMSAlgorithm(val ap: CMSAlgorithmParams)
 
   /** Generate final blackList based on other constraints */
   def genBlackList(query: Query): Set[String] = {
-    // if unseenOnly is True, get all seen items
+    // if unseenOnly is True, get all seen articles
     val seenArticles: Set[String] = if (ap.unseenOnly) {
 
-      // get all user item events which are considered as "seen" events
+      // get all user article events which are considered as "seen" events
       val seenEvents: Iterator[Event] = try {
         LEventStore.findByEntity(
           appName = ap.appName,
           entityType = "user",
           entityId = query.user,
           eventNames = Some(ap.seenEvents),
-          targetEntityType = Some(Some("item")),
+          targetEntityType = Some(Some("article")),
           // set time limit to avoid super long DB access
           timeout = Duration(200, "millis")
         )
@@ -342,7 +342,7 @@ class CMSAlgorithm(val ap: CMSAlgorithmParams)
         timeout = Duration(200, "millis")
       )
       if (constr.hasNext) {
-        constr.next.properties.get[Set[String]]("items")
+        constr.next.properties.get[Set[String]]("articles")
       } else {
         Set[String]()
       }
@@ -361,9 +361,9 @@ class CMSAlgorithm(val ap: CMSAlgorithmParams)
     query.blackList.getOrElse(Set[String]()) ++ seenArticles ++ unavailableArticles
   }
 
-  /** Get recent events of the user on items for recommending similar items */
+  /** Get recent events of the user on articles for recommending similar articles */
   def getRecentArticles(query: Query): Set[String] = {
-    // get latest 10 user view item events
+    // get latest 10 user view article events
     val recentEvents = try {
       LEventStore.findByEntity(
         appName = ap.appName,
@@ -371,7 +371,7 @@ class CMSAlgorithm(val ap: CMSAlgorithmParams)
         entityType = "user",
         entityId = query.user,
         eventNames = Some(ap.similarEvents),
-        targetEntityType = Some(Some("item")),
+        targetEntityType = Some(Some("article")),
         limit = Some(10),
         latest = true,
         // set time limit to avoid super long DB access
@@ -427,7 +427,7 @@ class CMSAlgorithm(val ap: CMSAlgorithmParams)
         // may customize here to further adjust score
         (i, s)
       }
-      .filter(_._2 > 0) // only keep items with score > 0
+      .filter(_._2 > 0) // only keep articles with score > 0
       .seq // convert back to sequential collection
 
     val ord = Ordering.by[(Int, Double), Double](_._2).reverse
@@ -466,7 +466,7 @@ class CMSAlgorithm(val ap: CMSAlgorithmParams)
     topScores
   }
 
-  /** Return top similar items based on items user recently has action on */
+  /** Return top similar articles based on articles user recently has action on */
   def predictSimilar(
     recentFeatures: Vector[Array[Double]],
     articleModels: Map[Int, ArticleModel],
